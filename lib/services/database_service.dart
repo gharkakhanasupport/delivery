@@ -25,6 +25,10 @@ class DatabaseService {
   factory DatabaseService() => _instance;
   DatabaseService._internal();
 
+  /// Cached cross-DB clients (lazily created once)
+  static SupabaseClient? _userDbClient;
+  static SupabaseClient? _kitchenDbClient;
+
   /// Initialize all database connections
   static Future<void> initialize() async {
     // 1. Primary DB (Delivery App's own DB) — uses Supabase.initialize
@@ -32,6 +36,38 @@ class DatabaseService {
       url: dotenv.env['SUPABASE_URL']!,
       anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
     );
+
+    // 2. Cross-DB clients for syncing order status back to User & Kitchen DBs
+    _initCrossDbClients();
+  }
+
+  /// Initialize cross-database clients from .env
+  static void _initCrossDbClients() {
+    try {
+      final userUrl = dotenv.env['USER_DB_URL'];
+      final userKey = dotenv.env['USER_DB_SERVICE_KEY'];
+      if (userUrl != null && userKey != null && userUrl.isNotEmpty && userKey.isNotEmpty) {
+        _userDbClient = SupabaseClient(userUrl, userKey);
+        debugPrint('[DatabaseService] ✅ User DB client initialized');
+      } else {
+        debugPrint('[DatabaseService] ⚠️ User DB env vars missing — cross-sync disabled');
+      }
+    } catch (e) {
+      debugPrint('[DatabaseService] ❌ User DB client init failed: $e');
+    }
+
+    try {
+      final kitchenUrl = dotenv.env['KITCHEN_DB_URL'];
+      final kitchenKey = dotenv.env['KITCHEN_DB_SERVICE_KEY'];
+      if (kitchenUrl != null && kitchenKey != null && kitchenUrl.isNotEmpty && kitchenKey.isNotEmpty) {
+        _kitchenDbClient = SupabaseClient(kitchenUrl, kitchenKey);
+        debugPrint('[DatabaseService] ✅ Kitchen DB client initialized');
+      } else {
+        debugPrint('[DatabaseService] ⚠️ Kitchen DB env vars missing — cross-sync disabled');
+      }
+    } catch (e) {
+      debugPrint('[DatabaseService] ❌ Kitchen DB client init failed: $e');
+    }
   }
 
   // =========================================================================
@@ -41,10 +77,11 @@ class DatabaseService {
   /// Get the Primary Client (Delivery DB) — authenticated via Supabase Auth
   SupabaseClient get primary => Supabase.instance.client;
 
-  /// Deprecated: Cross-DB clients are removed in favor of Edge Functions.
-  /// Returning null gracefully falls back in existing code.
-  SupabaseClient? get userDb => null;
-  SupabaseClient? get kitchenDb => null;
+  /// User DB client for syncing delivery status back to user orders
+  SupabaseClient? get userDb => _userDbClient;
+
+  /// Kitchen DB client for syncing delivery status back to kitchen orders
+  SupabaseClient? get kitchenDb => _kitchenDbClient;
 
   // =========================================================================
   // CROSS-DB HELPERS (VIA EDGE FUNCTIONS)

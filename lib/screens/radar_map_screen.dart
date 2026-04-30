@@ -90,10 +90,10 @@ class _RadarMapScreenState extends State<RadarMapScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (context) => OrderBottomSheet(
+      builder: (bottomSheetContext) => OrderBottomSheet(
         order: order,
         onAccept: () async {
-          Navigator.pop(context);
+          Navigator.pop(bottomSheetContext);
           // Show loading
           showDialog(
             context: context,
