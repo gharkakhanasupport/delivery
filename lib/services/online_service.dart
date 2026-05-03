@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'database_service.dart';
+import 'location_service.dart';
 
 /// Service for managing driver online/offline status
 /// Uses Geolocator position STREAM to avoid hanging on GPS acquisition.
@@ -22,6 +23,9 @@ class OnlineService {
   /// Last known position (cached to avoid blocking calls)
   static Position? _lastPosition;
 
+  /// Get the agent's current cached position
+  static Position? get currentPosition => _lastPosition;
+
   // ─────────────────────────────────────────────────────
   // GO ONLINE
   // ─────────────────────────────────────────────────────
@@ -32,6 +36,13 @@ class OnlineService {
   static Future<void> goOnline() async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) return;
+
+    // Check location permissions first
+    final hasLocation = await LocationService.initialize();
+    if (!hasLocation) {
+      debugPrint('[OnlineService] goOnline aborted due to missing location permission');
+      return;
+    }
 
     // Immediately flip the local flag so UI reacts instantly
     isOnline.value = true;

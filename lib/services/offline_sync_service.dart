@@ -83,7 +83,12 @@ class OfflineSyncService {
         try {
           if (action['type'] == 'delivery_completion') {
             // 1. Update Order Status
-            await OrderService.updateOrderStatus(action['orderId'], OrderStatus.delivered);
+            await OrderService.updateOrderStatus(
+              action['orderId'],
+              OrderStatus.delivered,
+              isCod: action['isCod'] == true,
+              orderTotal: ((action['codAmount'] as num?) ?? 0).toDouble(),
+            );
             
             // 2. Process Earnings
             await WalletService.processDeliveryEarnings(

@@ -113,6 +113,7 @@ class Order {
   final double earnings;
   final double distance;
   final int estimatedTime;
+  final String paymentMethod;
 
   // Status tracking
   final OrderStatus status;
@@ -136,6 +137,12 @@ class Order {
   /// Get a 4-character short ID for map display
   String get shortId => id.length >= 4 ? id.substring(0, 4).toUpperCase() : id;
 
+  /// True when the order should be handled as cash on delivery.
+  bool get isCashOnDelivery {
+    final method = paymentMethod.trim().toLowerCase();
+    return method == 'cash' || method == 'cod' || method == 'cod_cash';
+  }
+
   Order({
     required this.id,
     required this.orderNumber,
@@ -155,6 +162,7 @@ class Order {
     required this.earnings,
     required this.distance,
     required this.estimatedTime,
+    this.paymentMethod = 'online',
     this.status = OrderStatus.pending,
     this.currentLocation,
     required this.createdAt,
@@ -270,6 +278,7 @@ class Order {
           (json['estimated_time_minutes'] as num?)?.toInt() ??
           (json['estimated_time_mins'] as num?)?.toInt() ??
           0,
+        paymentMethod: (json['payment_method'] as String?) ?? 'online',
       status: OrderStatus.fromString(json['status'] as String?),
       currentLocation: currentLoc,
       createdAt: json['created_at'] != null
@@ -323,6 +332,7 @@ class Order {
       'agent_earnings': earnings,
       'estimated_distance_km': distance,
       'estimated_time_minutes': estimatedTime,
+      'payment_method': paymentMethod,
       'status': status.dbValue,
       'current_location': currentLocation?.toJson(),
     };

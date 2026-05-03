@@ -44,13 +44,14 @@ class DatabaseService {
   /// Initialize cross-database clients from .env
   static void _initCrossDbClients() {
     try {
-      final userUrl = dotenv.env['USER_DB_URL'];
-      final userKey = dotenv.env['USER_DB_SERVICE_KEY'];
-      if (userUrl != null && userKey != null && userUrl.isNotEmpty && userKey.isNotEmpty) {
-        _userDbClient = SupabaseClient(userUrl, userKey);
-        debugPrint('[DatabaseService] ✅ User DB client initialized');
+      final unifiedUrl = dotenv.env['SUPABASE_URL'];
+      final unifiedKey = dotenv.env['SUPABASE_SERVICE_ROLE_KEY'];
+      if (unifiedUrl != null && unifiedKey != null) {
+        _userDbClient = SupabaseClient(unifiedUrl, unifiedKey);
+        _kitchenDbClient = SupabaseClient(unifiedUrl, unifiedKey);
+        debugPrint('[DatabaseService] Unified DB Clients Initialized');
       } else {
-        debugPrint('[DatabaseService] ⚠️ User DB env vars missing — cross-sync disabled');
+        debugPrint('[DatabaseService] Missing keys');
       }
     } catch (e) {
       debugPrint('[DatabaseService] ❌ User DB client init failed: $e');
@@ -106,3 +107,5 @@ class DatabaseService {
     }
   }
 }
+
+

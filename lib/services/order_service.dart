@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 import '../models/order.dart';
 import 'database_service.dart';
 import 'geocoding_service.dart';
+import 'online_service.dart';
 
 /// Service for managing delivery orders
 ///
@@ -36,14 +38,34 @@ class OrderService {
           .inFilter('status', ['pending', 'confirmed', 'preparing', 'ready', 'ready_for_pickup'])
           .isFilter('delivery_partner_id', null)
           .order('created_at', ascending: false)
-          .limit(20);
+          .limit(50); // Increased limit as we'll filter by distance now
 
-      return (response as List).map((json) => Order.fromJson(json)).toList();
+      final List<Order> allOrders = (response as List).map((json) => Order.fromJson(json)).toList();
+      return _filterOrdersWithinRadius(allOrders, 5000); // 5km radius
     } catch (e) {
       debugPrint('[OrderService] Error fetching available orders: $e');
       // Fallback: try fetching directly from User DB
-      return _fetchOrdersDirectlyFromUserDb();
+      final List<Order> fbOrders = await _fetchOrdersDirectlyFromUserDb();
+      return _filterOrdersWithinRadius(fbOrders, 5000);
     }
+  }
+
+  static List<Order> _filterOrdersWithinRadius(List<Order> orders, double radiusInMeters) {
+    final currentPos = OnlineService.currentPosition;
+    if (currentPos == null) {
+      // If we don't have location yet, return all to not show false empty screen
+      return orders;
+    }
+    
+    return orders.where((order) {
+      final distance = Geolocator.distanceBetween(
+        currentPos.latitude,
+        currentPos.longitude,
+        order.location.latitude,
+        order.location.longitude,
+      );
+      return distance <= radiusInMeters;
+    }).toList();
   }
 
   /// Sync orders from User DB → Delivery DB
@@ -444,11 +466,24 @@ class OrderService {
     double? latitude,
     double? longitude,
     String? notes,
+    bool isCod = false,
+    double orderTotal = 0,
   }) async {
     final userId = _deliveryDb.auth.currentUser?.id;
     if (userId == null) return false;
 
     try {
+      // Phase D: COD Reverse Liability via DB RPC
+      if (newStatus == OrderStatus.delivered && isCod) {
+        try {
+          final deliveryFee = 30.0;
+          await _deliveryDb.rpc('debit_agent_wallet', params: {'p_agent_id': userId, 'p_amount': orderTotal});
+          await _deliveryDb.rpc('credit_agent_wallet', params: {'p_agent_id': userId, 'p_amount': deliveryFee});
+        } catch(e) {
+          debugPrint('[OrderService] Error handling COD liability: $e');
+        }
+      }
+
       final updateData = <String, dynamic>{'status': newStatus.dbValue};
 
       // Add timestamp based on status

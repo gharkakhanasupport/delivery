@@ -683,6 +683,10 @@ class _DeliveryNavigationScreenState extends State<DeliveryNavigationScreen> {
 
     if (verified != true || !mounted) return;
 
+    if (!await _confirmCashCollectedIfNeeded()) {
+      return;
+    }
+
     final isOffline = await OfflineSyncService.isOffline();
         
     if (isOffline) {
@@ -690,7 +694,7 @@ class _DeliveryNavigationScreenState extends State<DeliveryNavigationScreen> {
       await OfflineSyncService().queueDeliveryCompletion(
         orderId: widget.order.id,
         deliveryFee: widget.order.deliveryFee,
-        isCod: widget.order.totalAmount > 0, // Simplified COD check
+        isCod: widget.order.isCashOnDelivery,
         codAmount: widget.order.totalAmount,
       );
       
@@ -707,6 +711,8 @@ class _DeliveryNavigationScreenState extends State<DeliveryNavigationScreen> {
         widget.order.id,
         OrderStatus.delivered,
         previousStatus: 'out_for_delivery',
+        isCod: widget.order.isCashOnDelivery,
+        orderTotal: widget.order.totalAmount,
       );
 
       final credited = await EarningsCreditService.creditForCompletedDelivery(
@@ -727,6 +733,62 @@ class _DeliveryNavigationScreenState extends State<DeliveryNavigationScreen> {
 
     _stopLocationStreaming();
     _showCompletionDialog();
+  }
+
+  Future<bool> _confirmCashCollectedIfNeeded() async {
+    final isCod = widget.order.isCashOnDelivery;
+    if (!isCod) return true;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          backgroundColor: isDark ? AppColors.darkCard : Colors.white,
+          title: Text(
+            'Confirm Cash Collected',
+            style: AppTypography.headingStyle(
+              color: isDark ? AppColors.textLight : AppColors.textPrimary,
+              size: 18,
+            ),
+          ),
+          content: Text(
+            'This order is marked as Cash on Delivery. Confirm that you have collected ₹${widget.order.totalAmount.toStringAsFixed(2)} from the customer before completing delivery.',
+            style: AppTypography.bodyStyle(
+              color: isDark ? AppColors.textLightSecondary : AppColors.textSecondary,
+              size: 14,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.emeraldGreen,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Cash Collected'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Delivery paused until cash is confirmed.'),
+          backgroundColor: AppColors.goldenMustard,
+        ),
+      );
+    }
+
+    return confirmed == true;
   }
 
   void _showCompletionDialog() {

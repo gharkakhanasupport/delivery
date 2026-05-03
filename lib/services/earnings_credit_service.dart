@@ -12,6 +12,11 @@ import 'wallet_service.dart';
 class EarningsCreditService {
   static final _db = DatabaseService().primary;
 
+  static bool _isCashOnDelivery(String? paymentMethod) {
+    final method = paymentMethod?.trim().toLowerCase() ?? 'online';
+    return method == 'cash' || method == 'cod' || method == 'cod_cash';
+  }
+
   /// Credit delivery fee for a completed order.
   /// Safe to call more than once — RPC guards against double-credit.
   static Future<double?> creditForCompletedDelivery(String orderId) async {
@@ -31,7 +36,7 @@ class EarningsCreditService {
       final paymentMethod =
           (row['payment_method'] as String?)?.toLowerCase() ?? 'online';
       final totalAmount = ((row['total_amount'] as num?) ?? 0).toDouble();
-      final isCod = paymentMethod == 'cash';
+        final isCod = _isCashOnDelivery(paymentMethod);
 
       if (earnings <= 0) {
         debugPrint('[EarningsCredit] no agent_earnings set on $orderId');
